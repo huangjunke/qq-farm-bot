@@ -686,6 +686,44 @@ function formatFriendGold(value: unknown) {
   return gold.toLocaleString('zh-CN')
 }
 
+// 相对时间文案需要随时间推进自动刷新（“N 分钟前”会随分钟变化）
+const nowMs = ref(Date.now())
+useIntervalFn(() => {
+  nowMs.value = Date.now()
+}, 30_000)
+
+/**
+ * 好友最后活跃时间：
+ * <1 分钟  → “刚刚在线”
+ * <1 小时  → “N 分钟前在线”
+ * <1 天    → “N 小时前在线”
+ * <30 天   → “N 天前在线”
+ * ≥30 天   → “YYYY/MM/DD”
+ * 无数据   → 返回空串（不展示）
+ */
+function formatFriendLastActive(lastActiveTimeMs: unknown): string {
+  const ts = Number(lastActiveTimeMs) || 0
+  if (!ts)
+    return ''
+  const diff = Math.max(0, nowMs.value - ts)
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+  if (diff < minute)
+    return '刚刚在线'
+  if (diff < hour)
+    return `${Math.floor(diff / minute)} 分钟前在线`
+  if (diff < day)
+    return `${Math.floor(diff / hour)} 小时前在线`
+  if (diff < 30 * day)
+    return `${Math.floor(diff / day)} 天前在线`
+  const d = new Date(ts)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}/${m}/${dd}`
+}
+
 function getFriendAvatar(friend: any) {
   return String(friend?.avatarUrl || friend?.avatar_url || '').trim()
 }
@@ -1042,6 +1080,14 @@ async function handleBatchAddKnownFriendGids() {
                   <strong class="friend-name" :title="friend.name">{{ friend.name }}</strong>
                   <span class="friend-gid">{{ friend.gid }}</span>
                   <span v-if="blacklistGidSet.has(Number(friend.gid))" class="f-tag f-tag--blocked">已屏蔽</span>
+                </div>
+                <div
+                  v-if="formatFriendLastActive(friend.lastActiveTimeMs)"
+                  class="friend-active-time"
+                  :title="`最后活跃：${formatFriendLastActive(friend.lastActiveTimeMs)}`"
+                >
+                  <span class="i-carbon-time" aria-hidden="true" />
+                  <span>{{ formatFriendLastActive(friend.lastActiveTimeMs) }}</span>
                 </div>
                 <div class="friend-tags">
                   <span v-if="getFriendLevel(friend) > 0" class="f-tag f-tag--level">Lv.{{ getFriendLevel(friend) }}</span>
@@ -1552,6 +1598,23 @@ async function handleBatchAddKnownFriendGids() {
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.friend-active-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  color: var(--ui-subtle);
+  font-size: 12px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.friend-active-time > span:first-child {
+  font-size: 13px;
+  opacity: 0.85;
 }
 
 .friend-gid {

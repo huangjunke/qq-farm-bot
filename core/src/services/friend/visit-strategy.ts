@@ -12,7 +12,7 @@ const {
     getFriendsListCacheTtlSec,
 } = require('../../models/store');
 const { getUserState } = require('../../utils/network');
-const { toNum, getServerTimeSec, getSystemClockMinutes, log, logWarn, sleep, randomDelay } = require('../../utils/utils');
+const { toNum, toTimeSec, getServerTimeSec, getSystemClockMinutes, log, logWarn, sleep, randomDelay } = require('../../utils/utils');
 
 const {
     getCurrentPhase,
@@ -404,28 +404,33 @@ export function cacheFriendsListFromReply(reply: any): any[] {
     const state: any = getUserState();
     const result: any[] = extractReplyFriends(reply)
         .filter((f: any) => toNum(f.gid) !== state.gid && f.name !== '小小农夫' && f.remark !== '小小农夫')
-        .map((f: any) => ({
-            gid: toNum(f.gid),
-            name: f.remark || f.name || `GID:${toNum(f.gid)}`,
-            avatarUrl: String(f.avatar_url || '').trim(),
-            level: toNum(f.level),
-            gold: toNum(f.gold),
-            plant: f.plant ? {
-                stealNum: toNum(f.plant.steal_plant_num),
-                dryNum: toNum(f.plant.dry_num),
-                weedNum: toNum(f.plant.weed_num),
-                insectNum: toNum(f.plant.insect_num),
-            } : null,
-            weather: f.weather ? {
-                type: toNum(f.weather.weather_type),
-                status: toNum(f.weather.status),
-                beginTime: toNum(f.weather.begin_time),
-                endTime: toNum(f.weather.end_time),
-                source: toNum(f.weather.source),
-                field8: toNum(f.weather.field_8),
-                friendMarker: toNum(f.weather.field_9),
-            } : null,
-        }))
+        .map((f: any) => {
+            const lastActiveSec: number = toTimeSec(f.last_active_time);
+            return {
+                gid: toNum(f.gid),
+                name: f.remark || f.name || `GID:${toNum(f.gid)}`,
+                avatarUrl: String(f.avatar_url || '').trim(),
+                level: toNum(f.level),
+                gold: toNum(f.gold),
+                // 最后活跃时间（毫秒时间戳），proto 返回秒/毫秒均可，0 表示未知
+                lastActiveTimeMs: lastActiveSec > 0 ? lastActiveSec * 1000 : 0,
+                plant: f.plant ? {
+                    stealNum: toNum(f.plant.steal_plant_num),
+                    dryNum: toNum(f.plant.dry_num),
+                    weedNum: toNum(f.plant.weed_num),
+                    insectNum: toNum(f.plant.insect_num),
+                } : null,
+                weather: f.weather ? {
+                    type: toNum(f.weather.weather_type),
+                    status: toNum(f.weather.status),
+                    beginTime: toNum(f.weather.begin_time),
+                    endTime: toNum(f.weather.end_time),
+                    source: toNum(f.weather.source),
+                    field8: toNum(f.weather.field_8),
+                    friendMarker: toNum(f.weather.field_9),
+                } : null,
+            };
+        })
         .sort((a: any, b: any) => {
             // 固定顺序：先按名称，再按 GID，避免刷新时顺序抖动
             const an: string = String(a.name || '');
